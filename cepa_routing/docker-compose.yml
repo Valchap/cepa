@@ -1,0 +1,10 @@
+version: "3"
+services:
+  c1:
+    image: cepar
+    ports:
+      - 55505:55505
+  c2:
+    image: cepar
+  c3:
+    image: cepar
