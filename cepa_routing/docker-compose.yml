@@ -1,10 +1,17 @@
 version: "3"
 services:
   c1:
+    build:
+      context: .
+      dockerfile: cepar.Dockerfile
     image: cepar
     ports:
       - 55505:55505
   c2:
+    depends_on:
+      - c1
     image: cepar
   c3:
+    depends_on:
+      - c1
     image: cepar

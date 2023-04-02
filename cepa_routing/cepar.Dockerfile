@@ -1,4 +1,4 @@
-FROM rust
+FROM rust:alpine3.17
 
 RUN mkdir -p /opt/cepa_routing
 
