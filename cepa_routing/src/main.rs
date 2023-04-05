@@ -4,9 +4,24 @@ use std::{
     thread,
 };
 
+use serde_json;
+
 fn forward_message(next_hop: String, message: String) {
     let mut n_stream = TcpStream::connect(format!("{}:55505", next_hop)).unwrap();
     n_stream.write(&message.into_bytes()).unwrap();
+}
+
+fn get_directory() {
+    // -> Vec<String> {
+    let mut n_stream = TcpStream::connect("localhost:8080").unwrap();
+    n_stream.write(b"GET").unwrap();
+
+    let mut dir_string: String = "".to_string();
+
+    n_stream.read_to_string(&mut dir_string).unwrap();
+    println!("dir: {}", dir_string);
+    // return serde_json::from_str(&n_stream.read_to_string().unwrap()).unwrap();
+    // return Vec::new();
 }
 
 fn handle_connection(mut stream: TcpStream) {
@@ -48,6 +63,8 @@ fn handle_user_input() {
 fn main() {
     let listener = TcpListener::bind("0.0.0.0:55505").unwrap();
     println!("Listening on 55505");
+
+    get_directory();
 
     thread::spawn(|| {
         handle_user_input();

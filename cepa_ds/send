@@ -1,0 +1,1 @@
+echo $1 | nc -N localhost 8080
