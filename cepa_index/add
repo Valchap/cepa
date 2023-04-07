@@ -1,0 +1,15 @@
+#!/bin/python
+
+import requests
+import sys
+
+if len(sys.argv) != 3:
+    print("Usage: send HOST PUB_KEY")
+    exit(1)
+
+r = requests.post('http://localhost:8000', json={
+  "host": "{}".format(sys.argv[1]),
+  "pub_key": "{}".format(sys.argv[2]),
+})
+
+print(f"Status Code: {r.status_code}, Response: {r.content.decode('utf-8')}")

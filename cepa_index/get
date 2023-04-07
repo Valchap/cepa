@@ -1,0 +1,10 @@
+#!/bin/python
+
+import requests
+import json
+
+r = requests.get('http://localhost:8000/')
+
+print(f"Status Code: {r.status_code}")
+print("Response:")
+print(json.dumps(json.loads(r.content.decode("utf-8")), indent=2))
