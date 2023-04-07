@@ -1,27 +1,61 @@
 use std::{
     io::{self, Read, Write},
     net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
     thread,
 };
 
+use cepa_common::{NodeData, NodeList, NodeListPointer};
+
 use serde_json;
+
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 fn forward_message(next_hop: String, message: String) {
     let mut n_stream = TcpStream::connect(format!("{}:55505", next_hop)).unwrap();
     n_stream.write(&message.into_bytes()).unwrap();
 }
 
-fn get_directory() {
-    // -> Vec<String> {
-    let mut n_stream = TcpStream::connect("localhost:8080").unwrap();
-    n_stream.write(b"GET").unwrap();
+fn get_directory(data: Arc<Mutex<NodeList>>) {
+    let delta = Duration::from_secs(5);
+    let mut next_time = Instant::now() + delta;
+    loop {
+        if let Ok(mut n_stream) = TcpStream::connect("127.0.0.1:8000") {
+            match n_stream.write("GET / HTTP/1.1\nConnection: Close\n\n".as_bytes()) {
+                Ok(_) => {
+                    let mut dir_string = String::new();
+                    match n_stream.read_to_string(&mut dir_string) {
+                        Ok(_) => {
+                            let json_txt = dir_string.split("\n").last().unwrap();
+                            let t: NodeList = serde_json::from_str(json_txt).unwrap();
+                            match data.lock() {
+                                Ok(mut d) => {
+                                    d.timestamp = t.timestamp;
+                                    d.list = t.list;
+                                }
+                                Err(_) => {
+                                    panic!("Could not access data")
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            println!("hey");
+                            panic!("Can't read from tcp stream")
+                        }
+                    }
+                }
+                Err(_) => {
+                    panic!("Could not send request")
+                }
+            }
+        } else {
+            panic!("Could not connect to index")
+        };
 
-    let mut dir_string: String = "".to_string();
-
-    n_stream.read_to_string(&mut dir_string).unwrap();
-    println!("dir: {}", dir_string);
-    // return serde_json::from_str(&n_stream.read_to_string().unwrap()).unwrap();
-    // return Vec::new();
+        sleep(next_time - Instant::now());
+        next_time += delta;
+    }
 }
 
 fn handle_connection(mut stream: TcpStream) {
@@ -48,34 +82,57 @@ fn handle_connection(mut stream: TcpStream) {
 }
 
 // Handle user input from stdin
-fn handle_user_input() {
+fn handle_user_input(data: Arc<Mutex<NodeList>>) {
     let mut user_input: String;
     let stdin = io::stdin();
     loop {
         user_input = "".to_string();
         stdin.read_line(&mut user_input).unwrap();
         if !user_input.is_empty() {
-            println!("{}", user_input);
+            match user_input.as_str() {
+                "dir\n" => {
+                    println!("{:?}", data.lock())
+                }
+                _ => {
+                    println!("{}", user_input);
+                }
+            }
         }
     }
 }
 
 fn main() {
-    let listener = TcpListener::bind("0.0.0.0:55505").unwrap();
-    println!("Listening on 55505");
+    match TcpListener::bind("0.0.0.0:55505") {
+        Ok(listener) => {
+            // println!("Listening on 55505");
 
-    get_directory();
+            let data: Arc<Mutex<NodeList>> = Arc::new(Mutex::new(NodeList {
+                timestamp: 0,
+                list: Vec::new(),
+            }));
 
-    thread::spawn(|| {
-        handle_user_input();
-    });
+            let mut data_clone = data.clone();
 
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
+            thread::spawn(move || {
+                get_directory(data_clone);
+            });
 
-        // TODO Fix -> Can spawn an infinite number of threads !!!!
-        thread::spawn(|| {
-            handle_connection(stream);
-        });
+            data_clone = data.clone();
+            thread::spawn(move || {
+                handle_user_input(data_clone);
+            });
+
+            // for stream in listener.incoming() {
+            //     let stream = stream.unwrap();
+
+            //     // TODO Fix -> Can spawn an infinite number of threads !!!!
+            //     thread::spawn(|| {
+            //         handle_connection(stream);
+            //     });
+            // }
+        }
+        Err(_) => {
+            panic!("Could not bind on port 55505");
+        }
     }
 }
