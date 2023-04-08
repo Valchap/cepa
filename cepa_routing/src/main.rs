@@ -130,7 +130,8 @@ fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>) {
 fn print_help() {
     println!(
         "\x1b[1mCommands:\x1b[0m
-    \x1b[1;94mdir\x1b[0m                Print the local list of announced cepa nodes
+    \x1b[1;94mls\x1b[0m                 Print the local list of announced cepa nodes
+    \x1b[1;94mlsd\x1b[0m                Debug print the local list of announced cepa nodes
     \x1b[1;94mget\x1b[0m                Ask the cepa_index for the list of nodes
     \x1b[1;94msend\x1b[0m HOST MSG      Send message to host
     \x1b[1;94madd\x1b[0m  HOST PUB_KEY  Add a node to cepa_index
@@ -157,7 +158,26 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>) {
                 .nth(0)
                 .unwrap_or("\n")
             {
-                "dir" => {
+                "ls" => {
+                    let d = data.lock().unwrap();
+                    let width = 24;
+                    println!("+-------------------------------------------------+");
+                    println!(
+                        "| \x1b[1;94mTIMESTAMP:\x1b[0m {n:<width$}             |",
+                        n = d.timestamp
+                    );
+                    println!("+------------------------+------------------------+");
+                    println!(
+                        "|          \x1b[1;94mHOST\x1b[0m          |         \x1b[1;94mPUB_KEY\x1b[0m        |"
+                    );
+                    println!("+------------------------+------------------------+");
+
+                    for node in d.list.clone() {
+                        println!("|{:width$}|{:width$}|", node.host, node.pub_key);
+                    }
+                    println!("+------------------------+------------------------+");
+                }
+                "lsd" => {
                     println!("{:#?}", data.lock().unwrap())
                 }
                 "get" => {
