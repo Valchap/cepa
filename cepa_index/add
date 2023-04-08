@@ -7,7 +7,7 @@ if len(sys.argv) != 3:
     print("Usage: send HOST PUB_KEY")
     exit(1)
 
-r = requests.post('http://localhost:8000', json={
+r = requests.post('https://cepa.ech0.ch:443', json={
   "host": "{}".format(sys.argv[1]),
   "pub_key": "{}".format(sys.argv[2]),
 })

@@ -1,17 +1,24 @@
 version: "3"
 services:
-  c1:
+  index:
     build:
       context: .
-      dockerfile: ./cepa_routing/cepar.Dockerfile
-    image: cepar
+      dockerfile: ./cepa_index/cepa_index.Dockerfile
+    image: cepa-index
     ports:
-      - 55505:55505
-  c2:
+      - 8000:8000
+  node1:
+    build:
+      context: .
+      dockerfile: ./cepa_routing/cepa_routing.Dockerfile
+    image: cepa-router
     depends_on:
-      - c1
-    image: cepar
-  c3:
+      - index
+  node2:
     depends_on:
-      - c1
-    image: cepar
+      - index
+    image: cepa-router
+  node3:
+    depends_on:
+      - index
+    image: cepa-router

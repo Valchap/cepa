@@ -12,8 +12,8 @@ use serde_json;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-const CEPA_INDEX_HOST: &str = "127.0.0.1";
-const CEPA_INDEX_PORT: &str = "8000";
+const CEPA_INDEX_HOST: &str = "cepa.ech0.ch";
+const CEPA_INDEX_PORT: &str = "443";
 const CEPA_INDEX_PUB_KEY: &str = "keyhere";
 
 const CEPA_ROUTER_PORT: &str = "55505";
@@ -69,39 +69,16 @@ Connection: Close
 }
 
 fn get_dir(data: Arc<Mutex<NodeList>>) {
-    if let Ok(mut n_stream) = TcpStream::connect(format!("{}:{}", CEPA_INDEX_HOST, CEPA_INDEX_PORT))
-    {
-        match n_stream.write("GET / HTTP/1.1\nConnection: Close\n\n".as_bytes()) {
-            Ok(_) => {
-                let mut dir_string = String::new();
-                match n_stream.read_to_string(&mut dir_string) {
-                    Ok(_) => {
-                        let json_txt = dir_string.split("\n").last().unwrap();
-                        let t: NodeList = serde_json::from_str(json_txt).unwrap();
-                        match data.lock() {
-                            Ok(mut d) => {
-                                if t.timestamp > d.timestamp {
-                                    d.timestamp = t.timestamp;
-                                    d.list = t.list;
-                                }
-                            }
-                            Err(_) => {
-                                panic!("Could not access data")
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        panic!("Can't read from tcp stream")
-                    }
-                }
-            }
-            Err(_) => {
-                panic!("Could not send request")
-            }
-        }
-    } else {
-        panic!("Could not connect to index")
-    };
+    let resp = reqwest::blocking::get(format!("https://{}:{}/", CEPA_INDEX_HOST, CEPA_INDEX_PORT))
+        .unwrap()
+        .json::<NodeList>()
+        .unwrap();
+
+    let mut d = data.lock().unwrap();
+    if resp.timestamp > d.timestamp {
+        d.timestamp = resp.timestamp;
+        d.list = resp.list;
+    }
 }
 
 fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>) {

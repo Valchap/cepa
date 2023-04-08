@@ -3,7 +3,7 @@
 import requests
 import json
 
-r = requests.get('http://localhost:8000/')
+r = requests.get('https://cepa.ech0.ch:443/', verify=True)
 
 print(f"Status Code: {r.status_code}")
 print("Response:")
