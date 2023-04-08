@@ -34,37 +34,21 @@ fn timed_get_dir(data: Arc<Mutex<NodeList>>) {
 }
 
 fn add_host(d: NodeData) {
-    if let Ok(mut n_stream) = TcpStream::connect(format!("{}:{}", CEPA_INDEX_HOST, CEPA_INDEX_PORT))
-    {
-        let req = format!(
-            "
-POST / HTTP/1.1
-Content-Length: {}
-Content-Type: application/json
-Connection: Close
+    let req = format!(
+        "{{\"host\": \"{}\", \"pub_key\": \"{}\"}}",
+        d.host, d.pub_key
+    );
 
-{{\"host\": \"{}\", \"pub_key\": \"{}\"}} 
-        ",
-            (d.host.as_bytes().len() + d.pub_key.as_bytes().len() + 27),
-            d.host,
-            d.pub_key
-        );
-        match n_stream.write(req.as_bytes()) {
-            Ok(_) => {
-                let mut buf = String::new();
-                match n_stream.read_to_string(&mut buf) {
-                    Ok(_) => {
-                        println!("{}", buf);
-                    }
-                    Err(_) => {
-                        panic!("Could not read from stream")
-                    }
-                }
-            }
-            Err(_) => {
-                panic!("Could not send request to cepa_index")
-            }
-        }
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .post(format!("https://{}:{}", CEPA_INDEX_HOST, CEPA_INDEX_PORT))
+        .header("Content-Type", "application/json")
+        .body(req)
+        .send()
+        .unwrap();
+
+    if res.status() == 200 {
+        println!("OK");
     }
 }
 
