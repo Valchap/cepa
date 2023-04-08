@@ -38,8 +38,10 @@ fn get_dir(data: Arc<Mutex<NodeList>>) {
                         let t: NodeList = serde_json::from_str(json_txt).unwrap();
                         match data.lock() {
                             Ok(mut d) => {
-                                d.timestamp = t.timestamp;
-                                d.list = t.list;
+                                if t.timestamp > d.timestamp {
+                                    d.timestamp = t.timestamp;
+                                    d.list = t.list;
+                                }
                             }
                             Err(_) => {
                                 panic!("Could not access data")
