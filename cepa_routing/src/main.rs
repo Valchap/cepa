@@ -89,11 +89,12 @@ fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>) {
 fn print_help() {
     println!(
         "\x1b[1mCommands:\x1b[0m
-    \x1b[1;94mdir\x1b[0m      Print the local list of announced cepa nodes
-    \x1b[1;94mget\x1b[0m      Ask the cepa_index for the list of nodes
-    \x1b[1;94mclear\x1b[0m    Clear screen
-    \x1b[1;94mexit\x1b[0m     Exit the cepa_router process
-    \x1b[1;94mhelp\x1b[0m     Print this help"
+    \x1b[1;94mdir\x1b[0m            Print the local list of announced cepa nodes
+    \x1b[1;94mget\x1b[0m            Ask the cepa_index for the list of nodes
+    \x1b[1;94msend\x1b[0m HOST MSG  Send message to host
+    \x1b[1;94mclear\x1b[0m          Clear screen
+    \x1b[1;94mexit\x1b[0m           Exit the cepa_router process
+    \x1b[1;94mhelp\x1b[0m           Print this help"
     );
 }
 
@@ -107,21 +108,48 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>) {
         let _ = io::stdout().flush();
         stdin.read_line(&mut user_input).unwrap();
         if !user_input.is_empty() {
-            match user_input.as_str() {
-                "dir\n" => {
+            match user_input
+                .as_str()
+                .split_whitespace()
+                .into_iter()
+                .nth(0)
+                .unwrap_or("\n")
+            {
+                "dir" => {
                     println!("{:#?}", data.lock().unwrap())
                 }
-                "get\n" => {
+                "get" => {
                     get_dir(data.clone());
                 }
-                "clear\n" => {
+                "clear" => {
                     print!("\x1B[2J\x1B[1;1H");
                 }
-                "exit\n" => {
+                "exit" => {
                     std::process::exit(0);
                 }
-                "help\n" => {
+                "help" => {
                     print_help();
+                }
+                "send" => {
+                    if user_input.as_str().split_whitespace().count() != 3 {
+                        println!("Usage: send HOST MESSAGE");
+                    } else {
+                        let next_hop = user_input
+                            .as_str()
+                            .split_whitespace()
+                            .into_iter()
+                            .nth(1)
+                            .unwrap()
+                            .to_string();
+                        let message = user_input
+                            .as_str()
+                            .split_whitespace()
+                            .into_iter()
+                            .nth(2)
+                            .unwrap()
+                            .to_string();
+                        forward_message(next_hop, message);
+                    }
                 }
                 _ => {
                     if user_input != "\n" {

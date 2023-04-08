@@ -3,7 +3,7 @@ services:
   c1:
     build:
       context: .
-      dockerfile: cepar.Dockerfile
+      dockerfile: ./cepa_routing/cepar.Dockerfile
     image: cepar
     ports:
       - 55505:55505
