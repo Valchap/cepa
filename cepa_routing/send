@@ -1,0 +1,23 @@
+#!/bin/python
+
+# import requests
+import sys
+import socket
+
+if len(sys.argv) != 3:
+    print("Usage: send HOST MESSAGE")
+    exit(1)
+
+
+PORT = 55505
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((sys.argv[1], PORT))
+s.sendall(bytes(sys.argv[2].encode("utf-8")))
+
+# r = requests.post('https://cepa.ech0.ch:443', json={
+#   "host": "{}".format(sys.argv[1]),
+#   "pub_key": "{}".format(sys.argv[2]),
+# })
+
+# print(f"Status Code: {r.status_code}, Response: {r.content.decode('utf-8')}")

@@ -4,7 +4,7 @@ import requests
 import sys
 
 if len(sys.argv) != 3:
-    print("Usage: send HOST PUB_KEY")
+    print("Usage: add HOST PUB_KEY")
     exit(1)
 
 r = requests.post('https://cepa.ech0.ch:443', json={

@@ -12,11 +12,24 @@ use cepa_common::{NodeData, NodeList};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 const CEPA_INDEX_HOST: &str = "cepa.ech0.ch";
 const CEPA_INDEX_PORT: &str = "443";
 const CEPA_INDEX_PUB_KEY: &str = "keyhere";
 
 const CEPA_ROUTER_PORT: &str = "55505";
+
+#[derive(Debug, Clone)]
+struct Message {
+    timestamp_received: u64,
+    message: String,
+}
+
+#[derive(Debug, Clone)]
+struct Log {
+    list: Vec<Message>,
+}
 
 fn forward_message(next_hop: &str, message: &str) {
     let mut n_stream = TcpStream::connect(format!("{}:{}", next_hop, CEPA_ROUTER_PORT)).unwrap();
@@ -65,14 +78,21 @@ fn get_dir(data: Arc<Mutex<NodeList>>) {
     }
 }
 
-fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>) {
+fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>, log: Arc<Mutex<Log>>) {
     // stream.write(b"connection handled").unwrap();
 
     // Read from tcp stream
     let mut buf: String = "".to_string();
     stream.read_to_string(&mut buf).unwrap();
 
-    println!("received: {}", buf);
+    let mut l = log.lock().unwrap();
+    l.list.push(Message {
+        timestamp_received: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        message: buf.clone(),
+    });
 
     // Check if the message needs to be forwarded
     if buf.starts_with("sendto:") {
@@ -83,19 +103,24 @@ fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>) {
         forward_message(next_hop, &message);
 
         // forward_message(next_hop, message);
-    } else {
-        println!("{}", buf);
     }
 }
 
 fn print_help() {
     println!(
         "\x1b[1mCommands:\x1b[0m
-    \x1b[1;94mls\x1b[0m                 Print the local list of announced cepa nodes
-    \x1b[1;94mlsd\x1b[0m                Debug print the local list of announced cepa nodes
-    \x1b[1;94mget\x1b[0m                Ask the cepa_index for the list of nodes
+  \x1b[1mIndex:\x1b[0m
+    \x1b[1;94mget\x1b[0m                HTTP GET NodeList from cepa_index
+    \x1b[1;94madd\x1b[0m  HOST PUB_KEY  HTTP POST NodeData to cepa_index
+
+  \x1b[1mNode:\x1b[0m
+    \x1b[1;94mls(d)\x1b[0m              (Debug) Print NodeList
+    \x1b[1;94mlog(d)\x1b[0m             (Debug) Print Log
+
     \x1b[1;94msend\x1b[0m HOST MSG      Send message to host
-    \x1b[1;94madd\x1b[0m  HOST PUB_KEY  Add a node to cepa_index
+    \x1b[1;94mdate\x1b[0m               Show current unix time
+    \x1b[1;94mflush\x1b[0m              Flush Log
+
     \x1b[1;94mclear\x1b[0m              Clear screen
     \x1b[1;94mexit\x1b[0m               Exit the cepa_router process
     \x1b[1;94mhelp\x1b[0m               Print this help"
@@ -103,7 +128,7 @@ fn print_help() {
 }
 
 // Handle user input from stdin
-fn handle_user_input(data: Arc<Mutex<NodeList>>) {
+fn handle_user_input(data: Arc<Mutex<NodeList>>, log: Arc<Mutex<Log>>) {
     let stdin = io::stdin();
     loop {
         let mut user_input = String::new();
@@ -164,6 +189,29 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>) {
                         add_host(NodeData { host, pub_key });
                     }
                 }
+                "log" => {
+                    let l = log.lock().unwrap();
+                    for message in l.list.clone() {
+                        println!("[{}] {}", message.timestamp_received, message.message);
+                    }
+                }
+                "logd" => {
+                    let l = log.lock().unwrap();
+                    println!("{:#?}", l);
+                }
+                "date" => {
+                    println!(
+                        "{}",
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs()
+                    );
+                }
+                "flush" => {
+                    let mut l = log.lock().unwrap();
+                    l.list = Vec::new();
+                }
                 _ => {
                     if user_input != "\n" {
                         user_input.pop();
@@ -201,6 +249,8 @@ fn main() {
                 list: Vec::new(),
             }));
 
+            let log: Arc<Mutex<Log>> = Arc::new(Mutex::new(Log { list: Vec::new() }));
+
             let mut data_clone = data.clone();
 
             thread::spawn(move || {
@@ -208,15 +258,17 @@ fn main() {
             });
 
             data_clone = data.clone();
+            let mut log_clone = log.clone();
             thread::spawn(move || {
-                handle_user_input(data_clone);
+                handle_user_input(data_clone, log_clone);
             });
 
             for stream in listener.incoming() {
                 let stream = stream.unwrap();
                 data_clone = data.clone();
-                thread::spawn(|| {
-                    handle_connection(stream, data_clone);
+                log_clone = log.clone();
+                thread::spawn(move || {
+                    handle_connection(stream, data_clone, log_clone);
                 });
             }
         }
