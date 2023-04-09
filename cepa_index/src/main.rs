@@ -25,22 +25,18 @@ fn rocket() -> _ {
 #[get("/")]
 fn get_index(state: &State<NodeListPointer>) -> Json<NodeList> {
     match state.lock() {
-        Ok(d) => {
-            return Json(NodeList {
-                timestamp: match SystemTime::now().duration_since(UNIX_EPOCH) {
-                    Ok(n) => n.as_secs(),
-                    Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-                },
-                list: d.list.clone(),
-            });
-        }
-        Err(_) => {
-            return Json(NodeList {
-                timestamp: (0),
-                list: (Vec::new()),
-            })
-        }
-    };
+        Ok(d) => Json(NodeList {
+            timestamp: match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(n) => n.as_secs(),
+                Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+            },
+            list: d.list.clone(),
+        }),
+        Err(_) => Json(NodeList {
+            timestamp: (0),
+            list: (Vec::new()),
+        }),
+    }
 }
 
 #[post("/", format = "json", data = "<data>")]
@@ -56,8 +52,8 @@ fn add_node(state: &State<NodeListPointer>, data: Json<NodeData>) -> String {
                 host: (data.host.clone()),
                 pub_key: (data.pub_key.clone()),
             });
-            return "OK".to_string();
+            "OK".to_owned()
         }
-        Err(_) => return "NOK".to_string(),
-    };
+        Err(_) => "NOK".to_owned(),
+    }
 }

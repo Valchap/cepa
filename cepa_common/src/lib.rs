@@ -17,3 +17,12 @@ pub struct NodeList {
     pub timestamp: u64,
     pub list: Vec<NodeData>,
 }
+
+impl NodeList {
+    pub fn new() -> Self {
+        Self {
+            timestamp: 0,
+            list: Vec::new(),
+        }
+    }
+}
