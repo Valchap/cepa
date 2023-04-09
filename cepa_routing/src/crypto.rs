@@ -1,6 +1,6 @@
 use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit, Nonce};
 use rand::RngCore;
-use rsa::{BigUint, Oaep, PublicKey, RsaPrivateKey, RsaPublicKey};
+use rsa::{Oaep, PublicKey, RsaPrivateKey, RsaPublicKey};
 
 pub fn encrypt_rsa(pub_key: &RsaPublicKey, msg: &[u8]) -> Vec<u8> {
     let mut rng = rand::thread_rng();
@@ -14,7 +14,7 @@ pub fn encrypt_rsa(pub_key: &RsaPublicKey, msg: &[u8]) -> Vec<u8> {
 pub fn decrypt_rsa(priv_key: &RsaPrivateKey, enc_msg: &[u8]) -> Vec<u8> {
     let padding = Oaep::new::<sha2::Sha256>();
     priv_key
-        .decrypt(padding, &enc_msg)
+        .decrypt(padding, enc_msg)
         .expect("failed to decrypt RSA")
 }
 
@@ -31,7 +31,7 @@ pub fn encrypt_aes(msg: &[u8]) -> ([u8; 32], [u8; 12], Vec<u8>) {
 
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let cipher = Aes256Gcm::new(&key);
+    let cipher = Aes256Gcm::new(key);
     let enc_msg = cipher.encrypt(nonce, msg).expect("failed to encrypt AES");
 
     (key_bytes, nonce_bytes, enc_msg)
@@ -42,7 +42,7 @@ pub fn decrypt_aes(key_bytes: &[u8; 32], nonce_bytes: &[u8; 12], enc_msg: &[u8])
 
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    let cipher = Aes256Gcm::new(&key);
+    let cipher = Aes256Gcm::new(key);
 
     cipher
         .decrypt(nonce, enc_msg)

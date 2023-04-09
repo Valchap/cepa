@@ -7,9 +7,7 @@ use std::{
     thread,
 };
 
-use cepa_common::{NodeData, NodeList, NodeListPointer};
-
-use serde_json;
+use cepa_common::{NodeData, NodeList};
 
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -20,9 +18,9 @@ const CEPA_INDEX_PUB_KEY: &str = "keyhere";
 
 const CEPA_ROUTER_PORT: &str = "55505";
 
-fn forward_message(next_hop: String, message: String) {
+fn forward_message(next_hop: &str, message: &str) {
     let mut n_stream = TcpStream::connect(format!("{}:{}", next_hop, CEPA_ROUTER_PORT)).unwrap();
-    n_stream.write(&message.into_bytes()).unwrap();
+    n_stream.write_all(message.as_bytes()).unwrap();
 }
 
 fn timed_get_dir(data: Arc<Mutex<NodeList>>) {
@@ -82,7 +80,7 @@ fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>) {
         let next_hop = w[1];
         let msg: Vec<&str> = w[2..].to_vec();
         let message = msg.join(" ");
-        forward_message(next_hop.to_string(), message);
+        forward_message(next_hop, &message);
 
         // forward_message(next_hop, message);
     } else {
@@ -106,21 +104,14 @@ fn print_help() {
 
 // Handle user input from stdin
 fn handle_user_input(data: Arc<Mutex<NodeList>>) {
-    let mut user_input: String;
     let stdin = io::stdin();
     loop {
-        user_input = "".to_string();
+        let mut user_input = String::new();
         print!("cepa_router # ");
         let _ = io::stdout().flush();
         stdin.read_line(&mut user_input).unwrap();
         if !user_input.is_empty() {
-            match user_input
-                .as_str()
-                .split_whitespace()
-                .into_iter()
-                .nth(0)
-                .unwrap_or("\n")
-            {
+            match user_input.split_whitespace().next().unwrap_or("\n") {
                 "ls" => {
                     let d = data.lock().unwrap();
                     let width = 24;
@@ -156,23 +147,11 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>) {
                     print_help();
                 }
                 "send" => {
-                    if user_input.as_str().split_whitespace().count() != 3 {
+                    if user_input.split_whitespace().count() != 3 {
                         println!("Usage: send HOST MESSAGE");
                     } else {
-                        let next_hop = user_input
-                            .as_str()
-                            .split_whitespace()
-                            .into_iter()
-                            .nth(1)
-                            .unwrap()
-                            .to_string();
-                        let message = user_input
-                            .as_str()
-                            .split_whitespace()
-                            .into_iter()
-                            .nth(2)
-                            .unwrap()
-                            .to_string();
+                        let next_hop = user_input.split_whitespace().nth(1).unwrap();
+                        let message = user_input.split_whitespace().nth(2).unwrap();
                         forward_message(next_hop, message);
                     }
                 }
@@ -180,20 +159,8 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>) {
                     if user_input.as_str().split_whitespace().count() != 3 {
                         println!("Usage: add HOST PUB_KEY");
                     } else {
-                        let host = user_input
-                            .as_str()
-                            .split_whitespace()
-                            .into_iter()
-                            .nth(1)
-                            .unwrap()
-                            .to_string();
-                        let pub_key = user_input
-                            .as_str()
-                            .split_whitespace()
-                            .into_iter()
-                            .nth(2)
-                            .unwrap()
-                            .to_string();
+                        let host = user_input.split_whitespace().nth(1).unwrap().to_string();
+                        let pub_key = user_input.split_whitespace().nth(2).unwrap().to_string();
                         add_host(NodeData { host, pub_key });
                     }
                 }
