@@ -1,3 +1,5 @@
+mod crypto;
+
 use std::{
     io::{self, Read, Write},
     net::{TcpListener, TcpStream},
