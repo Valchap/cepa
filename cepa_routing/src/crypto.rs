@@ -56,12 +56,11 @@ pub fn wrap_layer(dest_pub_key: &RsaPublicKey, dest_ip: &[u8; 4], payload: &[u8]
     header.extend_from_slice(&aes_nonce);
     header.extend_from_slice(dest_ip);
 
-    let rsa_encrypted = encrypt_rsa(dest_pub_key, &header);
+    let mut rsa_encrypted = encrypt_rsa(dest_pub_key, &header);
 
-    let mut layer = rsa_encrypted.to_vec();
-    layer.append(&mut aes_encrypted);
+    rsa_encrypted.append(&mut aes_encrypted);
 
-    layer
+    rsa_encrypted
 }
 
 pub fn unwrap_layer(priv_key: &RsaPrivateKey, encrypted_data: &[u8]) -> ([u8; 4], Vec<u8>) {

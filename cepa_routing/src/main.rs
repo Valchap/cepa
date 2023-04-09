@@ -1,3 +1,8 @@
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::or_fun_call)]
+
 mod crypto;
 
 use std::{
@@ -32,7 +37,7 @@ struct Log {
 }
 
 fn forward_message(next_hop: &str, message: &str) {
-    let mut n_stream = TcpStream::connect(format!("{}:{}", next_hop, CEPA_ROUTER_PORT)).unwrap();
+    let mut n_stream = TcpStream::connect(format!("{next_hop}:{CEPA_ROUTER_PORT}")).unwrap();
     n_stream.write_all(message.as_bytes()).unwrap();
 }
 
@@ -46,27 +51,27 @@ fn timed_get_dir(data: Arc<Mutex<NodeList>>) {
     }
 }
 
-fn add_host(d: NodeData) {
-    let req = format!(
+fn add_host(d: &NodeData) {
+    let request = format!(
         "{{\"host\": \"{}\", \"pub_key\": \"{}\"}}",
         d.host, d.pub_key
     );
 
     let client = reqwest::blocking::Client::new();
-    let res = client
-        .post(format!("https://{}:{}", CEPA_INDEX_HOST, CEPA_INDEX_PORT))
+    let response = client
+        .post(format!("https://{CEPA_INDEX_HOST}:{CEPA_INDEX_PORT}"))
         .header("Content-Type", "application/json")
-        .body(req)
+        .body(request)
         .send()
         .unwrap();
 
-    if res.status() == 200 {
+    if response.status() == 200 {
         println!("OK");
     }
 }
 
 fn get_dir(data: Arc<Mutex<NodeList>>) {
-    let resp = reqwest::blocking::get(format!("https://{}:{}/", CEPA_INDEX_HOST, CEPA_INDEX_PORT))
+    let resp = reqwest::blocking::get(format!("https://{CEPA_INDEX_HOST}:{CEPA_INDEX_PORT}/"))
         .unwrap()
         .json::<NodeList>()
         .unwrap();
@@ -82,7 +87,7 @@ fn handle_connection(mut stream: TcpStream, data: Arc<Mutex<NodeList>>, log: Arc
     // stream.write(b"connection handled").unwrap();
 
     // Read from tcp stream
-    let mut buf: String = "".to_string();
+    let mut buf = String::new();
     stream.read_to_string(&mut buf).unwrap();
 
     let mut l = log.lock().unwrap();
@@ -151,13 +156,13 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>, log: Arc<Mutex<Log>>) {
                     );
                     println!("+------------------------+------------------------+");
 
-                    for node in d.list.clone() {
+                    for node in &d.list {
                         println!("|{:width$}|{:width$}|", node.host, node.pub_key);
                     }
                     println!("+------------------------+------------------------+");
                 }
                 "lsd" => {
-                    println!("{:#?}", data.lock().unwrap())
+                    println!("{:#?}", data.lock().unwrap());
                 }
                 "get" => {
                     get_dir(data.clone());
@@ -172,21 +177,21 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>, log: Arc<Mutex<Log>>) {
                     print_help();
                 }
                 "send" => {
-                    if user_input.split_whitespace().count() != 3 {
-                        println!("Usage: send HOST MESSAGE");
-                    } else {
+                    if user_input.split_whitespace().count() == 3 {
                         let next_hop = user_input.split_whitespace().nth(1).unwrap();
                         let message = user_input.split_whitespace().nth(2).unwrap();
                         forward_message(next_hop, message);
+                    } else {
+                        println!("Usage: send HOST MESSAGE");
                     }
                 }
                 "add" => {
-                    if user_input.as_str().split_whitespace().count() != 3 {
-                        println!("Usage: add HOST PUB_KEY");
-                    } else {
+                    if user_input.as_str().split_whitespace().count() == 3 {
                         let host = user_input.split_whitespace().nth(1).unwrap().to_string();
                         let pub_key = user_input.split_whitespace().nth(2).unwrap().to_string();
-                        add_host(NodeData { host, pub_key });
+                        add_host(&NodeData { host, pub_key });
+                    } else {
+                        println!("Usage: add HOST PUB_KEY");
                     }
                 }
                 "log" => {
@@ -215,7 +220,7 @@ fn handle_user_input(data: Arc<Mutex<NodeList>>, log: Arc<Mutex<Log>>) {
                 _ => {
                     if user_input != "\n" {
                         user_input.pop();
-                        println!("  Command \x1b[1;31m{}\x1b[0m not found", user_input);
+                        println!("  Command \x1b[1;31m{user_input}\x1b[0m not found");
                     }
                 }
             }
@@ -242,8 +247,6 @@ fn main() {
     print!("\x1b[0m");
     match TcpListener::bind(format!("0.0.0.0:{}", CEPA_ROUTER_PORT)) {
         Ok(listener) => {
-            // println!("Listening on 55505");
-
             let data: Arc<Mutex<NodeList>> = Arc::new(Mutex::new(NodeList {
                 timestamp: 0,
                 list: Vec::new(),
