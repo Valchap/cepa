@@ -54,10 +54,12 @@ struct SharedData {
     message_log: MessageLog,
 }
 
-fn forward_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<SharedData>>) {
+fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<SharedData>>) {
     let prepared_data = wrap_layer(
-        &RsaPublicKey::from(&shared_data.lock().unwrap().priv_key),
-        [127, 0, 0, 1],
+        &(
+            [127, 0, 0, 1],
+            &RsaPublicKey::from(&shared_data.lock().unwrap().priv_key),
+        ),
         data,
     );
 
@@ -68,10 +70,10 @@ fn forward_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<Sh
     stream.write_all(&prepared_data).unwrap();
 }
 
-fn forward_message_command(next_hop: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
+fn send_message_command(next_hop: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
     let address = next_hop.parse::<Ipv4Addr>().unwrap();
 
-    forward_message(message.as_bytes(), address.octets(), shared_data);
+    send_message(message.as_bytes(), address.octets(), shared_data);
 }
 
 fn timed_get_dir(shared_data: &Arc<Mutex<SharedData>>) {
@@ -133,7 +135,7 @@ fn handle_connection(mut stream: TcpStream, shared_data: &Arc<Mutex<SharedData>>
             message: (*String::from_utf8_lossy(&decrypted)).to_owned(),
         });
     } else {
-        forward_message(&decrypted, dest, shared_data);
+        send_message(&decrypted, dest, shared_data);
     }
 }
 
@@ -213,7 +215,7 @@ fn handle_user_input(shared_data: &Arc<Mutex<SharedData>>) {
                 if parameters.len() == 2 {
                     let next_hop = parameters[0];
                     let message = parameters[1];
-                    forward_message_command(next_hop, message, shared_data);
+                    send_message_command(next_hop, message, shared_data);
                 } else {
                     println!("Usage: send HOST MESSAGE");
                 }
