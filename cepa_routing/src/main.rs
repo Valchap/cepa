@@ -14,7 +14,12 @@ use std::{
 
 use cepa_common::{NodeData, NodeList};
 use crypto::{unwrap_layer, wrap_layer};
-use rsa::{RsaPrivateKey, RsaPublicKey};
+use rsa::{
+    pkcs1::{pem::Base64Encoder, DecodeRsaPublicKey, EncodeRsaPublicKey},
+    RsaPrivateKey, RsaPublicKey,
+};
+
+use base64::{engine::general_purpose, Engine as _};
 
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -52,6 +57,50 @@ struct SharedData {
     priv_key: RsaPrivateKey,
     node_list: NodeList,
     message_log: MessageLog,
+}
+
+fn rsa_pub_key_to_b64(key: RsaPublicKey) -> String {
+    let pem = match key.to_pkcs1_pem(rsa::pkcs1::LineEnding::CRLF) {
+        Ok(v) => v,
+        Err(_) => {
+            panic!("Error when trying to convert to PEM format");
+        }
+    };
+
+    general_purpose::STANDARD_NO_PAD.encode(pem)
+}
+
+fn b64_to_rsa_pub_key(s: String) -> RsaPublicKey {
+    let binding = general_purpose::STANDARD_NO_PAD.decode(s).unwrap();
+    let pem = std::str::from_utf8(&binding).unwrap();
+    return RsaPublicKey::from_pkcs1_pem(pem).unwrap();
+}
+
+fn get_three_nodes(shared_data: &Arc<Mutex<SharedData>>) -> Vec<NodeData> {
+    let sd = &shared_data.lock().unwrap();
+    let mut list = sd.node_list.list.clone();
+    let mut out: Vec<NodeData> = Vec::new();
+
+    if list.len() < 4 {
+        println!("Not enough nodes !");
+    } else {
+        while out.len() < 3 {
+            if (list.len() == 0) {
+                println!("Not enough nodes !");
+                break;
+            }
+            let r: u32 = rand::random::<u32>() % (list.len() as u32);
+
+            let random_node = list.remove(r as usize);
+
+            if random_node.pub_key != rsa_pub_key_to_b64(RsaPublicKey::from(sd.priv_key.clone())) {
+                out.push(random_node);
+            }
+        }
+        println!("{:#?}", out);
+    }
+
+    return out;
 }
 
 fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<SharedData>>) {
@@ -192,7 +241,8 @@ fn handle_user_input(shared_data: &Arc<Mutex<SharedData>>) {
                 println!("+------------------------+------------------------+");
 
                 for node in &d.node_list.list {
-                    println!("|{:width$}|{:width$}|", node.host, node.pub_key);
+                    let short_pk: String = node.pub_key.chars().take(24).collect();
+                    println!("|{:width$}|{:width$}|", node.host, short_pk,);
                 }
                 println!("+------------------------+------------------------+");
             }
@@ -221,12 +271,16 @@ fn handle_user_input(shared_data: &Arc<Mutex<SharedData>>) {
                 }
             }
             "add" => {
-                if parameters.len() == 2 {
+                if parameters.len() == 1 {
                     let host = parameters[0].to_owned();
-                    let pub_key = parameters[1].to_owned();
-                    add_host(&NodeData { host, pub_key });
+                    let public_key = &RsaPublicKey::from(&shared_data.lock().unwrap().priv_key);
+
+                    add_host(&NodeData {
+                        host,
+                        pub_key: rsa_pub_key_to_b64(public_key.clone()),
+                    });
                 } else {
-                    println!("Usage: add HOST PUB_KEY");
+                    println!("Usage: add HOST_IP");
                 }
             }
             "log" => {
@@ -251,6 +305,9 @@ fn handle_user_input(shared_data: &Arc<Mutex<SharedData>>) {
             "flush" => {
                 let l = &mut shared_data.lock().unwrap().message_log;
                 l.list.clear();
+            }
+            "g3n" => {
+                get_three_nodes(shared_data);
             }
             _ => {
                 println!("  Command \x1b[1;31m{command}\x1b[0m not found");

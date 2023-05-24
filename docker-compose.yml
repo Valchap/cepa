@@ -1,24 +1,26 @@
 version: "3"
 services:
-  index:
-    build:
-      context: .
-      dockerfile: ./cepa_index/cepa_index.Dockerfile
-    image: cepa-index
-    ports:
-      - 8000:8000
   node1:
     build:
       context: .
       dockerfile: ./cepa_routing/cepa_routing.Dockerfile
     image: cepa-router
-    depends_on:
-      - index
+    networks:
+      demo_net:
+        ipv4_address: 192.168.1.11
   node2:
-    depends_on:
-      - index
     image: cepa-router
+    networks:
+      demo_net:
+        ipv4_address: 192.168.1.12
   node3:
-    depends_on:
-      - index
     image: cepa-router
+    networks:
+      demo_net:
+        ipv4_address: 192.168.1.13
+networks:
+  demo_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
