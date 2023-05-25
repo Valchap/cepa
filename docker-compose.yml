@@ -18,6 +18,11 @@ services:
     networks:
       demo_net:
         ipv4_address: 192.168.1.13
+  node4:
+    image: cepa-router
+    networks:
+      demo_net:
+        ipv4_address: 192.168.1.14
 networks:
   demo_net:
     driver: bridge
