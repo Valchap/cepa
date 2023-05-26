@@ -13,9 +13,9 @@ use std::{
 };
 
 use cepa_common::{NodeData, NodeList};
-use crypto::{unwrap_layer, wrap_layer};
+use crypto::{onion_wrap, unwrap_layer, wrap_layer};
 use rsa::{
-    pkcs1::{pem::Base64Encoder, DecodeRsaPublicKey, EncodeRsaPublicKey},
+    pkcs1::{DecodeRsaPublicKey, EncodeRsaPublicKey},
     RsaPrivateKey, RsaPublicKey,
 };
 
@@ -28,7 +28,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const CEPA_INDEX_HOST: &str = "cepa.ech0.ch";
 const CEPA_INDEX_PORT: &str = "443";
-const CEPA_INDEX_PUB_KEY: &str = "keyhere";
 
 const CEPA_ROUTER_PORT: u16 = 55505;
 
@@ -70,40 +69,44 @@ fn rsa_pub_key_to_b64(key: RsaPublicKey) -> String {
     general_purpose::STANDARD_NO_PAD.encode(pem)
 }
 
-fn b64_to_rsa_pub_key(s: String) -> RsaPublicKey {
+fn b64_to_rsa_pub_key(s: &str) -> RsaPublicKey {
     let binding = general_purpose::STANDARD_NO_PAD.decode(s).unwrap();
     let pem = std::str::from_utf8(&binding).unwrap();
     return RsaPublicKey::from_pkcs1_pem(pem).unwrap();
 }
 
-fn get_three_nodes(shared_data: &Arc<Mutex<SharedData>>) -> Vec<NodeData> {
+fn generate_path(
+    shared_data: &Arc<Mutex<SharedData>>,
+    intermediates: usize,
+) -> Vec<([u8; 4], RsaPublicKey)> {
     let sd = &shared_data.lock().unwrap();
     let mut list = sd.node_list.list.clone();
-    let mut out: Vec<NodeData> = Vec::new();
+    let mut out: Vec<([u8; 4], RsaPublicKey)> = Vec::new();
 
-    if list.len() < 4 {
-        println!("Not enough nodes !");
-    } else {
-        while out.len() < 3 {
-            if (list.len() == 0) {
-                println!("Not enough nodes !");
-                break;
-            }
-            let r: u32 = rand::random::<u32>() % (list.len() as u32);
-
-            let random_node = list.remove(r as usize);
-
-            if random_node.pub_key != rsa_pub_key_to_b64(RsaPublicKey::from(sd.priv_key.clone())) {
-                out.push(random_node);
-            }
+    while out.len() < intermediates {
+        if list.len() == 0 {
+            println!("Not enough nodes !");
+            break;
         }
-        println!("{:#?}", out);
-    }
+        let r: u32 = rand::random::<u32>() % (list.len() as u32);
 
-    return out;
+        let random_node = list.remove(r as usize);
+
+        if random_node.pub_key != rsa_pub_key_to_b64(RsaPublicKey::from(&sd.priv_key)) {
+            out.push((
+                random_node.host.parse::<Ipv4Addr>().unwrap().octets(),
+                b64_to_rsa_pub_key(&random_node.pub_key),
+            ));
+        }
+    }
+    println!("{:#?}", out);
+
+    out
 }
 
 fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<SharedData>>) {
+    let path = generate_path(shared_data, 3);
+
     let prepared_data = wrap_layer(
         &(
             [127, 0, 0, 1],
@@ -119,8 +122,8 @@ fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<Share
     stream.write_all(&prepared_data).unwrap();
 }
 
-fn send_message_command(next_hop: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
-    let address = next_hop.parse::<Ipv4Addr>().unwrap();
+fn send_message_command(destination: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
+    let address = destination.parse::<Ipv4Addr>().unwrap();
 
     send_message(message.as_bytes(), address.octets(), shared_data);
 }
@@ -263,9 +266,9 @@ fn handle_user_input(shared_data: &Arc<Mutex<SharedData>>) {
             }
             "send" => {
                 if parameters.len() == 2 {
-                    let next_hop = parameters[0];
+                    let destination = parameters[0];
                     let message = parameters[1];
-                    send_message_command(next_hop, message, shared_data);
+                    send_message_command(destination, message, shared_data);
                 } else {
                     println!("Usage: send HOST MESSAGE");
                 }
@@ -307,7 +310,7 @@ fn handle_user_input(shared_data: &Arc<Mutex<SharedData>>) {
                 l.list.clear();
             }
             "g3n" => {
-                get_three_nodes(shared_data);
+                generate_path(shared_data, 3);
             }
             _ => {
                 println!("  Command \x1b[1;31m{command}\x1b[0m not found");
