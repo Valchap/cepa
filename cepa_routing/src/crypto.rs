@@ -49,28 +49,24 @@ fn decrypt_aes(key_bytes: &[u8; 32], nonce_bytes: &[u8; 12], enc_msg: &[u8]) -> 
         .expect("failed to decrypt AES")
 }
 
-pub fn wrap_layer(destination: &([u8; 4], &RsaPublicKey), payload: &[u8]) -> Vec<u8> {
+pub fn wrap_layer(destination: &([u8; 4], RsaPublicKey), payload: &[u8]) -> Vec<u8> {
     let (aes_key, aes_nonce, mut aes_encrypted) = encrypt_aes(payload);
 
     let mut header = aes_key.to_vec();
     header.extend_from_slice(&aes_nonce);
     header.extend_from_slice(&destination.0);
 
-    let mut rsa_encrypted = encrypt_rsa(destination.1, &header);
+    let mut rsa_encrypted = encrypt_rsa(&destination.1, &header);
 
     rsa_encrypted.append(&mut aes_encrypted);
 
     rsa_encrypted
 }
 
-pub fn onion_wrap(
-    intermediates: &[&([u8; 4], &RsaPublicKey)],
-    destination: &([u8; 4], &RsaPublicKey),
-    payload: &[u8],
-) -> Vec<u8> {
-    let mut wrapped = wrap_layer(destination, payload);
+pub fn onion_wrap(path: &[([u8; 4], RsaPublicKey)], payload: &[u8]) -> Vec<u8> {
+    let mut wrapped = payload.to_vec();
 
-    for &inter in intermediates {
+    for inter in path.iter().rev() {
         wrapped = wrap_layer(inter, &wrapped);
     }
 
@@ -103,7 +99,7 @@ fn main() {
 
     let message = b"Hello Cepa";
 
-    let wrapped = wrap_layer(&([127, 0, 0, 0], &public_key), message);
+    let wrapped = wrap_layer(&([127, 0, 0, 0], public_key), message);
 
     let (dest_ip, unwrapped) = unwrap_layer(&private_key, &wrapped);
 

@@ -1,8 +1,3 @@
-#![warn(clippy::pedantic)]
-#![warn(clippy::nursery)]
-#![allow(clippy::option_if_let_else)]
-#![allow(clippy::or_fun_call)]
-
 mod crypto;
 
 use std::{
@@ -12,14 +7,13 @@ use std::{
     thread,
 };
 
+use base64::{engine::general_purpose, Engine};
 use cepa_common::{NodeData, NodeList};
-use crypto::{onion_wrap, unwrap_layer, wrap_layer};
+use crypto::{onion_wrap, unwrap_layer};
 use rsa::{
     pkcs1::{DecodeRsaPublicKey, EncodeRsaPublicKey},
     RsaPrivateKey, RsaPublicKey,
 };
-
-use base64::{engine::general_purpose, Engine as _};
 
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -72,31 +66,24 @@ fn rsa_pub_key_to_b64(key: RsaPublicKey) -> String {
 fn b64_to_rsa_pub_key(s: &str) -> RsaPublicKey {
     let binding = general_purpose::STANDARD_NO_PAD.decode(s).unwrap();
     let pem = std::str::from_utf8(&binding).unwrap();
-    return RsaPublicKey::from_pkcs1_pem(pem).unwrap();
+    RsaPublicKey::from_pkcs1_pem(pem).unwrap()
 }
 
-fn generate_path(
-    shared_data: &Arc<Mutex<SharedData>>,
-    intermediates: usize,
-) -> Vec<([u8; 4], RsaPublicKey)> {
-    let sd = &shared_data.lock().unwrap();
+fn generate_path(shared_data: &Arc<Mutex<SharedData>>, intermediates: usize) -> Vec<[u8; 4]> {
+    let sd = shared_data.lock().unwrap();
     let mut list = sd.node_list.list.clone();
-    let mut out: Vec<([u8; 4], RsaPublicKey)> = Vec::new();
+    let mut out: Vec<[u8; 4]> = Vec::new();
 
     while out.len() < intermediates {
-        if list.len() == 0 {
-            println!("Not enough nodes !");
-            break;
+        if list.is_empty() {
+            panic!("Not enough nodes !");
         }
-        let r: u32 = rand::random::<u32>() % (list.len() as u32);
+        let r = rand::random::<usize>() % list.len();
 
-        let random_node = list.remove(r as usize);
+        let random_node = list.swap_remove(r);
 
         if random_node.pub_key != rsa_pub_key_to_b64(RsaPublicKey::from(&sd.priv_key)) {
-            out.push((
-                random_node.host.parse::<Ipv4Addr>().unwrap().octets(),
-                b64_to_rsa_pub_key(&random_node.pub_key),
-            ));
+            out.push(random_node.host.parse::<Ipv4Addr>().unwrap().octets());
         }
     }
     println!("{:#?}", out);
@@ -104,18 +91,43 @@ fn generate_path(
     out
 }
 
+fn get_pub_key(shared_data: &Arc<Mutex<SharedData>>, destination: &[u8; 4]) -> RsaPublicKey {
+    let sd = shared_data.lock().unwrap();
+
+    for host in &sd.node_list.list {
+        if host.host.parse::<Ipv4Addr>().unwrap().octets() == *destination {
+            return b64_to_rsa_pub_key(&host.pub_key);
+        }
+    }
+
+    panic!("Can't find public key");
+}
+
+fn make_dest_key_pairs(
+    shared_data: &Arc<Mutex<SharedData>>,
+    path: &[[u8; 4]],
+) -> Vec<([u8; 4], RsaPublicKey)> {
+    let mut dest_key = Vec::new();
+
+    for i in 0..path.len() {
+        dest_key.push((
+            path.get(i + 1).map_or([0u8; 4], |v| v.to_owned()),
+            get_pub_key(shared_data, &path[i]),
+        ))
+    }
+
+    dest_key
+}
+
 fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<SharedData>>) {
-    let path = generate_path(shared_data, 3);
+    let mut path = generate_path(shared_data, 3);
+    path.push(destination);
 
-    let prepared_data = wrap_layer(
-        &(
-            [127, 0, 0, 1],
-            &RsaPublicKey::from(&shared_data.lock().unwrap().priv_key),
-        ),
-        data,
-    );
+    let dest_key_pairs = make_dest_key_pairs(shared_data, &path);
 
-    let socket_addr = SocketAddr::from((destination, CEPA_ROUTER_PORT));
+    let prepared_data = onion_wrap(&dest_key_pairs, data);
+
+    let socket_addr = SocketAddr::from((path[0], CEPA_ROUTER_PORT));
 
     let mut stream = TcpStream::connect(socket_addr).unwrap();
 
