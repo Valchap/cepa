@@ -119,6 +119,14 @@ fn make_dest_key_pairs(
     dest_key
 }
 
+fn relay_message(data: &[u8], destination: [u8; 4]) {
+    let socket_addr = SocketAddr::from((destination, CEPA_ROUTER_PORT));
+
+    let mut stream = TcpStream::connect(socket_addr).unwrap();
+
+    stream.write_all(data).unwrap();
+}
+
 fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<SharedData>>) {
     let mut path = generate_path(shared_data, 3);
     path.push(destination);
@@ -127,11 +135,7 @@ fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<Share
 
     let prepared_data = onion_wrap(&dest_key_pairs, data);
 
-    let socket_addr = SocketAddr::from((path[0], CEPA_ROUTER_PORT));
-
-    let mut stream = TcpStream::connect(socket_addr).unwrap();
-
-    stream.write_all(&prepared_data).unwrap();
+    relay_message(&prepared_data, path[0]);
 }
 
 fn send_message_command(destination: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
@@ -199,7 +203,7 @@ fn handle_connection(mut stream: TcpStream, shared_data: &Arc<Mutex<SharedData>>
             message: (*String::from_utf8_lossy(&decrypted)).to_owned(),
         });
     } else {
-        send_message(&decrypted, dest, shared_data);
+        relay_message(&decrypted, dest);
     }
 }
 
