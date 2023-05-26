@@ -190,7 +190,7 @@ fn handle_connection(mut stream: TcpStream, shared_data: &Arc<Mutex<SharedData>>
 
     let (dest, decrypted) = unwrap_layer(&shared_data.lock().unwrap().priv_key, &buf);
 
-    if dest[0] == 127 {
+    if dest == [0u8; 4] {
         shared_data.lock().unwrap().message_log.list.push(Message {
             timestamp_received: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
