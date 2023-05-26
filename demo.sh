@@ -1,5 +1,7 @@
 #!/bin/bash
 
+curl -s https://cepa.ech0.ch/reset > /dev/null
+
 # Create a new session and detach from it
 tmux new-session -d -s mysession
 
