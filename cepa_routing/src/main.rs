@@ -131,6 +131,19 @@ fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<Share
     let mut path = generate_path(shared_data, 3);
     path.push(destination);
 
+    shared_data.lock().unwrap().message_log.list.push(Message {
+        timestamp_received: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        message: format!(
+            "SENT     : {} to {} via {}",
+            String::from_utf8_lossy(data),
+            Ipv4Addr::from(destination),
+            Ipv4Addr::from(path[0])
+        ),
+    });
+
     let dest_key_pairs = make_dest_key_pairs(shared_data, &path);
 
     let prepared_data = onion_wrap(&dest_key_pairs, data);
@@ -140,14 +153,6 @@ fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<Share
 
 fn send_message_command(destination: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
     let address = destination.parse::<Ipv4Addr>().unwrap();
-
-    shared_data.lock().unwrap().message_log.list.push(Message {
-        timestamp_received: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-        message: format!("SENT     : {} to {}", message, destination),
-    });
 
     send_message(message.as_bytes(), address.octets(), shared_data);
 }
