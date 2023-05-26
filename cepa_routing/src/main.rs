@@ -141,6 +141,14 @@ fn send_message(data: &[u8], destination: [u8; 4], shared_data: &Arc<Mutex<Share
 fn send_message_command(destination: &str, message: &str, shared_data: &Arc<Mutex<SharedData>>) {
     let address = destination.parse::<Ipv4Addr>().unwrap();
 
+    shared_data.lock().unwrap().message_log.list.push(Message {
+        timestamp_received: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        message: format!("SENT     : {} to {}", message, destination),
+    });
+
     send_message(message.as_bytes(), address.octets(), shared_data);
 }
 
@@ -200,9 +208,17 @@ fn handle_connection(mut stream: TcpStream, shared_data: &Arc<Mutex<SharedData>>
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
-            message: (*String::from_utf8_lossy(&decrypted)).to_owned(),
+            message: format!("RECEIVED : {}", String::from_utf8_lossy(&decrypted)),
         });
     } else {
+        shared_data.lock().unwrap().message_log.list.push(Message {
+            timestamp_received: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            message: format!("RELAYED  : {}", Ipv4Addr::from(dest)),
+        });
+
         relay_message(&decrypted, dest);
     }
 }
